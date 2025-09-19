@@ -7,7 +7,7 @@ I trained a small regression pipeline with scikit‑learn to estimate used car p
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python train.py
-python predict.py --year 2018 --miles 60000 --make Toyota --model Corolla --trim LE --condition 4.2
+python predict.py --year 2018 --miles 60000 --make Toyota --model Corolla --trim LE --condition .62
 ```
 
 ## What I learned
