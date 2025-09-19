@@ -1,0 +1,16 @@
+year,miles,make,model,trim,condition,price
+2016,86000,Toyota,Corolla,LE,4.0,11500
+2018,60000,Toyota,Corolla,LE,4.2,13500
+2019,45000,Honda,Civic,EX,4.5,17500
+2017,72000,Honda,Civic,LX,4.0,13800
+2020,30000,Hyundai,Elantra,SEL,4.6,18500
+2015,95000,Nissan,Altima,SV,3.8,9800
+2018,50000,Ford,Fusion,SE,4.3,14200
+2021,22000,Toyota,Camry,SE,4.7,25500
+2019,41000,Toyota,Corolla,SE,4.5,17200
+2017,58500,Hyundai,Elantra,SE,4.1,12000
+2020,35000,Honda,Civic,Sport,4.6,22000
+2016,78000,Ford,Fusion,S,3.9,10200
+2018,64000,Nissan,Altima,SV,4.1,12500
+2021,18000,Honda,Civic,EX,4.8,27000
+2015,105000,Toyota,Corolla,LE,3.6,9000
