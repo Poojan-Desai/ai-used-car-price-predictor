@@ -1,38 +1,89 @@
+"""Train the used-car price baseline and save its evaluation artifacts."""
+
+from __future__ import annotations
+
+import argparse
 import json
+from pathlib import Path
+
+import joblib
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import r2_score, mean_absolute_error
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
-import joblib
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 
-df = pd.read_csv('data/cars.csv')
+FEATURES = ["year", "miles", "make", "model", "trim", "condition"]
+TARGET = "price"
+NUMERIC_FEATURES = ["year", "miles", "condition"]
+CATEGORICAL_FEATURES = ["make", "model", "trim"]
 
-X = df[['year','miles','make','model','trim','condition']]
-y = df['price']
 
-num_features = ['year','miles','condition']
-cat_features = ['make','model','trim']
+def load_dataset(path: Path) -> pd.DataFrame:
+    """Load the training CSV and fail clearly when its schema is incomplete."""
+    data = pd.read_csv(path)
+    missing = sorted(set(FEATURES + [TARGET]) - set(data.columns))
+    if missing:
+        raise ValueError(f"Dataset is missing required columns: {', '.join(missing)}")
+    if data[FEATURES + [TARGET]].isna().any().any():
+        raise ValueError("Dataset contains missing values in required columns")
+    return data
 
-pre = ColumnTransformer([
-    ('num', 'passthrough', num_features),
-    ('cat', OneHotEncoder(handle_unknown='ignore'), cat_features)
-])
 
-model = RandomForestRegressor(n_estimators=200, random_state=42)
-pipe = Pipeline([('pre', pre), ('model', model)])
+def build_pipeline() -> Pipeline:
+    """Create a deterministic preprocessing and regression pipeline."""
+    preprocessing = ColumnTransformer(
+        [
+            ("numeric", "passthrough", NUMERIC_FEATURES),
+            (
+                "categorical",
+                OneHotEncoder(handle_unknown="ignore"),
+                CATEGORICAL_FEATURES,
+            ),
+        ]
+    )
+    model = RandomForestRegressor(n_estimators=200, random_state=42)
+    return Pipeline([("preprocessing", preprocessing), ("model", model)])
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-pipe.fit(X_train, y_train)
-pred = pipe.predict(X_test)
 
-r2 = r2_score(y_test, pred)
-mae = mean_absolute_error(y_test, pred)
+def train(data_path: Path, model_path: Path, metrics_path: Path) -> dict[str, float | int]:
+    """Fit the baseline, evaluate one fixed holdout, and save reproducible outputs."""
+    data = load_dataset(data_path)
+    x_train, x_test, y_train, y_test = train_test_split(
+        data[FEATURES],
+        data[TARGET],
+        test_size=0.25,
+        random_state=42,
+    )
 
-joblib.dump(pipe, 'model.pkl')
-with open('metrics.json','w') as f:
-    json.dump({'r2': float(r2), 'mae': float(mae)}, f, indent=2)
+    pipeline = build_pipeline()
+    pipeline.fit(x_train, y_train)
+    predictions = pipeline.predict(x_test)
 
-print('Saved model.pkl. R^2=', r2, 'MAE=', mae)
+    metrics: dict[str, float | int] = {
+        "rows": int(len(data)),
+        "holdout_rows": int(len(x_test)),
+        "mean_absolute_error": float(mean_absolute_error(y_test, predictions)),
+        "r2": float(r2_score(y_test, predictions)),
+    }
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(pipeline, model_path)
+    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    return metrics
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data", type=Path, default=Path("data/cars.csv"))
+    parser.add_argument("--model", type=Path, default=Path("artifacts/model.joblib"))
+    parser.add_argument("--metrics", type=Path, default=Path("artifacts/metrics.json"))
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    result = train(args.data, args.model, args.metrics)
+    print(json.dumps(result, indent=2))
