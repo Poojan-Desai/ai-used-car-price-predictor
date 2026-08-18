@@ -26,6 +26,11 @@ def test_training_saves_model_and_metrics(tmp_path: Path) -> None:
     assert metrics["rows"] == 15
     assert metrics["holdout_rows"] == 4
     assert metrics["mean_absolute_error"] >= 0
+    assert metrics["median_baseline_mae"] >= 0
+    assert metrics["cross_validation_folds"] == 3
+    assert metrics["cross_validation_mae_mean"] >= 0
+    assert metrics["cross_validation_mae_std"] >= 0
+    assert -100 <= metrics["mae_improvement_vs_baseline_pct"] <= 100
 
     pipeline = joblib.load(model_path)
     unseen = pd.DataFrame(

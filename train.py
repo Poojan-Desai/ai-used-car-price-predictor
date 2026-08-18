@@ -9,9 +9,10 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
@@ -32,8 +33,8 @@ def load_dataset(path: Path) -> pd.DataFrame:
     return data
 
 
-def build_pipeline() -> Pipeline:
-    """Create a deterministic preprocessing and regression pipeline."""
+def build_pipeline(model=None) -> Pipeline:
+    """Create a deterministic preprocessing pipeline around one regressor."""
     preprocessing = ColumnTransformer(
         [
             ("numeric", "passthrough", NUMERIC_FEATURES),
@@ -44,7 +45,8 @@ def build_pipeline() -> Pipeline:
             ),
         ]
     )
-    model = RandomForestRegressor(n_estimators=200, random_state=42)
+    if model is None:
+        model = RandomForestRegressor(n_estimators=200, random_state=42)
     return Pipeline([("preprocessing", preprocessing), ("model", model)])
 
 
@@ -61,12 +63,36 @@ def train(data_path: Path, model_path: Path, metrics_path: Path) -> dict[str, fl
     pipeline = build_pipeline()
     pipeline.fit(x_train, y_train)
     predictions = pipeline.predict(x_test)
+    holdout_mae = float(mean_absolute_error(y_test, predictions))
+
+    baseline = build_pipeline(DummyRegressor(strategy="median"))
+    baseline.fit(x_train, y_train)
+    baseline_mae = float(mean_absolute_error(y_test, baseline.predict(x_test)))
+
+    cross_validation = KFold(n_splits=3, shuffle=True, random_state=42)
+    cross_validation_mae = -cross_val_score(
+        build_pipeline(),
+        data[FEATURES],
+        data[TARGET],
+        scoring="neg_mean_absolute_error",
+        cv=cross_validation,
+        n_jobs=1,
+    )
 
     metrics: dict[str, float | int] = {
         "rows": int(len(data)),
         "holdout_rows": int(len(x_test)),
-        "mean_absolute_error": float(mean_absolute_error(y_test, predictions)),
+        "mean_absolute_error": holdout_mae,
         "r2": float(r2_score(y_test, predictions)),
+        "median_baseline_mae": baseline_mae,
+        "mae_improvement_vs_baseline_pct": float(
+            ((baseline_mae - holdout_mae) / baseline_mae) * 100
+            if baseline_mae
+            else 0
+        ),
+        "cross_validation_folds": 3,
+        "cross_validation_mae_mean": float(cross_validation_mae.mean()),
+        "cross_validation_mae_std": float(cross_validation_mae.std()),
     }
     model_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
